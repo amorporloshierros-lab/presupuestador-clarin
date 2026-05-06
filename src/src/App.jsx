@@ -491,46 +491,4 @@ export default function App() {
             </div>
           )}
 
-          {/* Tab: Cat\u00e1logo de referencia */}
-          {tabActiva==='catalogo' && (
-            <div style={S.card}>
-              <div style={{ fontWeight:800, fontSize:16, marginBottom:16 }}>Catalogo de precios ARQ Clarin Mayo 2026</div>
-              {Object.entries(RUBROS)
-                .sort((a,b)=>parseInt(a[0])-parseInt(b[0]))
-                .map(([rKey,rubro])=>(
-                <div key={rKey} style={{ marginBottom:20 }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', background:'#f1f5f9', padding:'6px 12px', borderRadius:6, marginBottom:6 }}>
-                    <span style={{ color:'#3b82f6', marginRight:6 }}>#{rKey}</span>{rubro.nombre}
-                  </div>
-                  <table style={S.tbl}>
-                    <thead><tr>
-                      <th style={{ ...S.th, width:60 }}>ID</th>
-                      <th style={S.th}>Descripcion</th>
-                      <th style={{ ...S.th, width:60, textAlign:'right' }}>Unid.</th>
-                      <th style={{ ...S.th, width:140, textAlign:'right' }}>Precio Mayo 2026</th>
-                    </tr></thead>
-                    <tbody>
-                      {rubro.items.map(it=>(
-                        <tr key={it.id}>
-                          <td style={{ ...S.td, color:'#94a3b8', fontSize:11 }}>{it.id}</td>
-                          <td style={S.td}>{it.desc}</td>
-                          <td style={{ ...S.tdNum, color:'#64748b' }}>{it.u}</td>
-                          <td style={{ ...S.tdNum, fontWeight:600 }}>{fmt$(it.precio)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-          )}
-
-        </div>
-      </div>
-
-      {showCatalogo && (
-        <ModalCatalogo onClose={()=>setShowCatalogo(false)} onAgregar={agregarLinea} />
-      )}
-    </div>
-  );
-}
+          {/* Tab: Catálogo de re
