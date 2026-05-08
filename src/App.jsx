@@ -3,8 +3,19 @@ import { ZONA_TIPOS } from './data/materiales.js';
 import { calcularEstructura, calcularLineasZona, calcularTotales, resumenPorZona, calcularCronograma, R } from './engine/calculos.js';
 
 // ── Formateo ──────────────────────────────────────────────────
-const $ = v => '$ ' + Math.round(v || 0).toLocaleString('es-AR');
 const N = v => (v || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+// Formateadores con contexto de moneda — se sobreescriben con useMoneda()
+let _tc = 1400;
+let _usd = false;
+const $ = v => {
+  const n = Math.round(v || 0);
+  if (_usd) return 'U$D ' + Math.round(n / _tc).toLocaleString('es-AR');
+  return '$ ' + n.toLocaleString('es-AR');
+};
+const $dual = v => {
+  const n = Math.round(v || 0);
+  return { ars: '$ ' + n.toLocaleString('es-AR'), usd: 'U$D ' + Math.round(n / _tc).toLocaleString('es-AR') };
+};
 
 // ── Colores de zonas ──────────────────────────────────────────
 const ZONA_COLORS = {
@@ -687,6 +698,10 @@ export default function App() {
     [proyecto.tipoEstructura, proyecto.mCubiertos, proyecto.mSemicubiertos, proyecto.mBalcones, proyecto.techo]
   );
 
+  const [moneda, setMoneda] = useState('ARS');
+  const [tc, setTc] = useState(1400);
+  _tc = tc;
+  _usd = moneda === 'USD';
   const PASOS = ['Datos del proyecto', 'Zonas y materiales', 'Resumen'];
 
   return (
@@ -699,6 +714,27 @@ export default function App() {
             <div style={{ fontSize:11, color:'#94a3b8' }}>Base ARQ Clarín · Mayo 2026 · CABA y GBA</div>
           </div>
           <div style={{ flex:1 }} />
+          {/* Moneda toggle */}
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginRight:16 }}>
+            <div style={{ fontSize:11, color:'#64748b' }}>TC Blue:</div>
+            <div style={{ display:'flex', alignItems:'center', background:'#1e293b', borderRadius:6, overflow:'hidden', border:'1px solid #334155' }}>
+              <input
+                type="number"
+                value={tc}
+                onChange={e => setTc(+e.target.value)}
+                style={{ width:70, background:'transparent', border:'none', color:'#94a3b8', fontSize:12, padding:'4px 6px', outline:'none', textAlign:'right' }}
+              />
+              <span style={{ fontSize:11, color:'#64748b', padding:'0 6px' }}>$/U$D</span>
+            </div>
+            <div style={{ display:'flex', borderRadius:6, overflow:'hidden', border:'1px solid #334155' }}>
+              {['ARS','USD'].map(m => (
+                <div key={m} style={{ padding:'4px 12px', fontSize:12, fontWeight:700, cursor:'pointer',
+                  background: moneda===m ? '#3b82f6' : 'transparent',
+                  color: moneda===m ? '#fff' : '#64748b' }}
+                  onClick={() => setMoneda(m)}>{m}</div>
+              ))}
+            </div>
+          </div>
           {/* Stepper */}
           <div style={{ display:'flex', alignItems:'center', gap:4 }}>
             {PASOS.map((p, i) => {
