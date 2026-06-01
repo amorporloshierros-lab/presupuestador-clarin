@@ -99,28 +99,25 @@ function cmpCeramicaPiso(selId, cant, zona) {
 }
 
 // ── Ceramica en pared/revestimiento ───────────────────────────
-// IMPORTANTE: usa área REAL de pared (no zona.m2)
-// cant que viene = zona.m2 * 1.10 (incorrecto para paredes)
-// Se recalcula internamente con perímetro × altura real
-function cmpCeramicaPared(selId, cantOrig, zona) {
-  // Área real de pared: perímetro × 2.6m altura × 0.85 (descuento aperturas)
-  const areaReal = R(4 * Math.sqrt(zona.m2) * 2.6 * 0.85 * 1.10);
+// cant = área real de pared YA calculada en calcularLineasZona:
+//        4 × √m² × 2.6m × 0.85 × (1+desperdicio)
+function cmpCeramicaPared(selId, cant, zona) {
   const isMos  = selId?.includes('mos') || selId?.includes('hidr') || selId?.includes('tejuela');
   const isPorc = selId?.includes('porc');
 
   if (isMos) {
-    // Mosaico: cemento cola blanco + fragüe especial
+    // Mosaico/hidráulico: cemento cola blanco + fragüe especial
     return [
-      _cmp('adh_cem_blanco', Math.ceil(areaReal * 3 / 25), zona, `${zona.id}_mosa`, `Cemento cola blanco mosaico (3 kg/m²)`),
-      _cmp('frague_pared',   Math.ceil(areaReal * 0.30),   zona, `${zona.id}_mosf`, `Fragüe mosaico (0.30 kg/m²)`),
+      _cmp('adh_cem_blanco', Math.ceil(cant * 3 / 25), zona, `${zona.id}_mosa`, `Cemento cola blanco mosaico (3 kg/m²)`),
+      _cmp('frague_pared',   Math.ceil(cant * 0.30),   zona, `${zona.id}_mosf`, `Fragüe mosaico (0.30 kg/m²)`),
     ].filter(Boolean);
   }
 
   const kgAdh = isPorc ? 5 : 4;
   return [
-    _cmp('adh_cem_blanco', Math.ceil(areaReal * kgAdh / 25), zona, `${zona.id}_radh`, `Adhesivo blanco pared — ${areaReal}m² real (${kgAdh} kg/m²)`),
-    _cmp('frague_pared',   Math.ceil(areaReal * 0.40),       zona, `${zona.id}_rfrg`, `Fragüe pared (0.40 kg/m²)`),
-    _cmp('crucetas_2mm',   Math.ceil(areaReal * 20 / 100),   zona, `${zona.id}_rcruc`,`Crucetas 2mm (20 u/m²)`),
+    _cmp('adh_cem_blanco', Math.ceil(cant * kgAdh / 25), zona, `${zona.id}_radh`, `Adhesivo blanco pared — ${Math.round(cant)}m² (${kgAdh} kg/m²)`),
+    _cmp('frague_pared',   Math.ceil(cant * 0.40),       zona, `${zona.id}_rfrg`, `Fragüe pared (0.40 kg/m²)`),
+    _cmp('crucetas_2mm',   Math.ceil(cant * 20 / 100),   zona, `${zona.id}_rcruc`,`Crucetas 2mm (20 u/m²)`),
   ].filter(Boolean);
 }
 
@@ -429,4 +426,7 @@ function calcularPlomeriaCocina(zona, m2Edificio) {
     { k:'pvc_050_2m',      cant:2,  r:'Plomería — Desagüe', d:'Caño PVC 50mm lavarropa + ventilación' },
     { k:'pvc_040_2m',      cant:1,  r:'Plomería — Desagüe', d:'Caño PVC 40mm ventilación secundaria' },
     { k:'codo_pvc90_075',  cant:2,  r:'Plomería — Desagüe', d:null },
-    { k:'codo_pvc45_075',  cant:1,  r:'Plomer�
+    { k:'codo_pvc45_075',  cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'codo_pvc90_050',  cant:2,  r:'Plomería — Desagüe', d:null },
+    { k:'tee_pvc_075',     cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'tee_red_075_050', can
