@@ -530,37 +530,80 @@ export const PRECIO_MAT_CLARIN = {
   '15.01':12000,  '16.01':4500,
 };
 
-// ── Plomería por unidad (precios de lista corralones) ─────────
+// ══════════════════════════════════════════════════════════════
+// CATÁLOGO PLOMERÍA — Precios unitarios corralones CABA · Mayo 2026
+// ══════════════════════════════════════════════════════════════
 export const PLOMERIA = {
-  // Desagüe cloacal
-  'pvc_110_2m': { desc:'Caño PVC 110mm × 2m',             unidad:'u',  precio: 21015 },
-  'pvc_063_2m': { desc:'Caño PVC 63mm × 2m',              unidad:'u',  precio: 12000 },
-  'codo_pvc90_110': { desc:'Codo PVC 90° 110mm',          unidad:'u',  precio: 4500  },
-  'tee_pvc_110': { desc:'Tee PVC 110mm',                  unidad:'u',  precio: 5800  },
-  'pvc_50_2m': { desc:'Caño PVC 50mm × 2m (ventilación)', unidad:'u',  precio: 8000  },
-  // Agua fría/caliente (termofusible)
-  'tf_25_4m': { desc:'Caño termofusible 25mm × 4m',       unidad:'u',  precio: 42000 },
-  'tf_20_4m': { desc:'Caño termofusible 20mm × 4m',       unidad:'u',  precio: 30854 },
-  'codo_tf_20': { desc:'Codo 90° termofusible 20mm',      unidad:'u',  precio: 850   },
-  'codo_tf_25': { desc:'Codo 90° termofusible 25mm',      unidad:'u',  precio: 1200  },
-  'tee_tf_20': { desc:'Tee termofusible 20mm',             unidad:'u',  precio: 1400  },
-  // Conexiones
-  'flexible_12': { desc:'Flexible acero mallado 1/2" × 30cm', unidad:'u', precio: 3850 },
-  'teflon': { desc:'Teflón (rollo)',                       unidad:'u',  precio: 2500  },
-  'sellarosca': { desc:'Sellarosca (pomo)',                unidad:'u',  precio: 6500  },
-  'llave_12': { desc:'Llave de paso esférica 1/2"',       unidad:'u',  precio: 12500 },
-  'llave_34': { desc:'Llave de paso esférica 3/4"',       unidad:'u',  precio: 18500 },
+
+  // ── DESAGÜE CLOACAL — Caños PVC ────────────────────────────
+  'pvc_110_2m':      { desc:'Caño PVC serie R 110mm × 2m',            unidad:'u',  precio: 21015 },
+  'pvc_075_2m':      { desc:'Caño PVC serie R 75mm × 2m',             unidad:'u',  precio: 14500 },
+  'pvc_063_2m':      { desc:'Caño PVC serie R 63mm × 2m',             unidad:'u',  precio: 12000 },
+  'pvc_050_2m':      { desc:'Caño PVC serie R 50mm × 2m',             unidad:'u',  precio: 8000  },
+  'pvc_040_2m':      { desc:'Caño PVC serie R 40mm × 2m',             unidad:'u',  precio: 7500  },
+
+  // ── DESAGÜE — Codos PVC ─────────────────────────────────────
+  'codo_pvc90_110':  { desc:'Codo PVC 90° 110mm',                     unidad:'u',  precio: 4500  },
+  'codo_pvc45_110':  { desc:'Codo PVC 45° 110mm',                     unidad:'u',  precio: 3800  },
+  'codo_pvc90_075':  { desc:'Codo PVC 90° 75mm',                      unidad:'u',  precio: 3200  },
+  'codo_pvc45_075':  { desc:'Codo PVC 45° 75mm',                      unidad:'u',  precio: 2500  },
+  'codo_pvc90_050':  { desc:'Codo PVC 90° 50mm',                      unidad:'u',  precio: 1800  },
+
+  // ── DESAGÜE — Tees PVC ──────────────────────────────────────
+  'tee_pvc_110':     { desc:'Tee PVC 110mm',                          unidad:'u',  precio: 5800  },
+  'tee_pvc_075':     { desc:'Tee PVC 75mm',                           unidad:'u',  precio: 4200  },
+  'tee_red_110_075': { desc:'Tee reductora PVC 110×75mm',             unidad:'u',  precio: 5500  },
+  'tee_red_075_050': { desc:'Tee reductora PVC 75×50mm',              unidad:'u',  precio: 3800  },
+
+  // ── DESAGÜE — Accesorios PVC ────────────────────────────────
+  'cupla_pvc_110':   { desc:'Cuplilla PVC 110mm',                     unidad:'u',  precio: 2800  },
+  'cupla_pvc_075':   { desc:'Cuplilla PVC 75mm',                      unidad:'u',  precio: 1800  },
+  'colarin_110':     { desc:'Collarín inodoro PVC 110mm c/tornillos', unidad:'u',  precio: 4800  },
+  'sifon_ducha':     { desc:'Trampa sifónica ducha PVC 50mm',         unidad:'u',  precio: 14500 },
+  'rejilla_piso_50': { desc:'Rejilla cromada piso 10×10cm c/trampa',  unidad:'u',  precio: 9200  },
+  'tapon_inspeccion':{ desc:'Tapón de inspección PVC 110mm',          unidad:'u',  precio: 3500  },
+  'adhesivo_pvc':    { desc:'Adhesivo PVC (pomo 500cc)',              unidad:'u',  precio: 5200  },
+
+  // ── AGUA FRÍA Y CALIENTE — Caños termofusibles ──────────────
+  'tf_25_4m':        { desc:'Caño termofusible 25mm × 4m',            unidad:'u',  precio: 42000 },
+  'tf_20_4m':        { desc:'Caño termofusible 20mm × 4m',            unidad:'u',  precio: 30854 },
+  'tf_16_4m':        { desc:'Caño termofusible 16mm × 4m',            unidad:'u',  precio: 22000 },
+
+  // ── AGUA — Codos termofusibles ──────────────────────────────
+  'codo_tf_25':      { desc:'Codo 90° termofusible 25mm',             unidad:'u',  precio: 1200  },
+  'codo_tf_20':      { desc:'Codo 90° termofusible 20mm',             unidad:'u',  precio: 850   },
+  'codo_tf_16':      { desc:'Codo 90° termofusible 16mm',             unidad:'u',  precio: 580   },
+
+  // ── AGUA — Tees termofusibles ───────────────────────────────
+  'tee_tf_25':       { desc:'Tee termofusible 25mm',                  unidad:'u',  precio: 1850  },
+  'tee_tf_20':       { desc:'Tee termofusible 20mm',                  unidad:'u',  precio: 1400  },
+  'tee_tf_16':       { desc:'Tee termofusible 16mm',                  unidad:'u',  precio: 1050  },
+
+  // ── AGUA — Reducciones y cuplillas TF ──────────────────────
+  'red_tf_25_20':    { desc:'Reducción termofusible 25→20mm',         unidad:'u',  precio: 1150  },
+  'red_tf_20_16':    { desc:'Reducción termofusible 20→16mm',         unidad:'u',  precio: 820   },
+  'cupla_tf_20':     { desc:'Cuplilla termofusible 20mm',             unidad:'u',  precio: 780   },
+  'cupla_tf_16':     { desc:'Cuplilla termofusible 16mm',             unidad:'u',  precio: 580   },
+
+  // ── CONEXIONES Y LLAVES ─────────────────────────────────────
+  'flexible_12':     { desc:'Flexible acero mallado 1/2" × 30cm',    unidad:'u',  precio: 3850  },
+  'flexible_38':     { desc:'Flexible acero mallado 3/8" × 30cm',    unidad:'u',  precio: 3200  },
+  'llave_12':        { desc:'Llave esférica paso total 1/2"',         unidad:'u',  precio: 12500 },
+  'llave_34':        { desc:'Llave esférica paso total 3/4"',         unidad:'u',  precio: 18500 },
+  'valvula_escl_34': { desc:'Válvula esclusa 3/4" (llave general)',   unidad:'u',  precio: 26500 },
+  'teflon':          { desc:'Teflón PTFE (rollo × 12m)',              unidad:'u',  precio: 2500  },
+  'sellarosca':      { desc:'Sellarosca Loctite (pomo)',              unidad:'u',  precio: 6500  },
 };
 
 // ── Electricidad por unidad ───────────────────────────────────
 export const ELECTRICIDAD = {
-  'cano_38': { desc:'Caño acero liviano 3/8" × 3m',      unidad:'u',  precio: 5850  }, // ~1,950/ml × 3
-  'cano_1p': { desc:'Caño acero liviano 1" × 3m',        unidad:'u',  precio: 9300  }, // ~3,100/ml × 3
-  'cable_25_100': { desc:'Cable cobre 2.5mm² × 100m',    unidad:'u',  precio: 86925 },
-  'cable_4_100': { desc:'Cable cobre 4mm² × 100m',       unidad:'u',  precio: 116415},
-  'termica_25': { desc:'Llave térmica 2×25A',             unidad:'u',  precio: 16052 },
-  'termica_40': { desc:'Llave térmica 2×40A',             unidad:'u',  precio: 28500 },
-  'diferencial_40': { desc:'Interruptor diferencial 2×40A',unidad:'u', precio: 30992 },
-  'tablero_12': { desc:'Tablero 12 circuitos c/barra tierra',unidad:'u',precio: 85000 },
-  'tablero_24': { desc:'Tablero 24 circuitos c/barra tierra',unidad:'u',precio: 145000},
+  'cano_38':       { desc:'Caño acero liviano 3/8" × 3m',           unidad:'u',  precio: 5850   },
+  'cano_1p':       { desc:'Caño acero liviano 1" × 3m',             unidad:'u',  precio: 9300   },
+  'cable_25_100':  { desc:'Cable cobre unipolar 2.5mm² × 100m',     unidad:'u',  precio: 86925  },
+  'cable_4_100':   { desc:'Cable cobre unipolar 4mm² × 100m',       unidad:'u',  precio: 116415 },
+  'termica_25':    { desc:'Llave térmica 2×25A',                     unidad:'u',  precio: 16052  },
+  'termica_40':    { desc:'Llave térmica 2×40A',                     unidad:'u',  precio: 28500  },
+  'diferencial_40':{ desc:'Interruptor diferencial 2×40A 30mA',     unidad:'u',  precio: 30992  },
+  'tablero_12':    { desc:'Tablero 12 circuitos c/barra tierra',     unidad:'u',  precio: 85000  },
+  'tablero_24':    { desc:'Tablero 24 circuitos c/barra tierra',     unidad:'u',  precio: 145000 },
 };
