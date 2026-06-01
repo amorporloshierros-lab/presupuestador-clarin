@@ -1,15 +1,296 @@
 // ══════════════════════════════════════════════════════════════
-// MOTOR DE CÁLCULO REAL — Basado en ARQ Clarín Mayo 2026
-// Rendimientos UOCRA · Plomería y electricidad pieza a pieza
+// MOTOR DE CÁLCULO REAL — ARQ Clarín Mayo 2026
+// Presupuesto pieza a pieza: estructura, ceramica, pintura,
+// Durlock, revoque, plomería, electricidad, zócalos, pluviales
 // ══════════════════════════════════════════════════════════════
 import {
   ESTRUCTURA_AUTO, PRECIO_MO_CLARIN, PRECIO_MAT_CLARIN,
-  ZONA_TIPOS, INODOROS, PLOMERIA, ELECTRICIDAD,
+  ZONA_TIPOS, INODOROS, PLOMERIA, ELECTRICIDAD, COMPANION,
 } from '../data/materiales.js';
 
 export const R = (n, d = 0) => Math.round(n * Math.pow(10, d)) / Math.pow(10, d);
 
-// ── 1. ESTRUCTURA AUTOMÁTICA ──────────────────────────────────
+// ── Peso de barras de hierro × 12m ────────────────────────────
+const BAR_KG = { d12:10.65, d10:7.40, d8:4.73, d6:2.66 };
+
+// ── Especificación de acero por tipo de elemento (kg/m³) ──────
+const HIERRO_SPEC = {
+  '05.02': { kg:60,  d12:0.30, d10:0.40, d8:0.25, d6:0.05 }, // bases
+  '05.03': { kg:50,  d12:0.20, d10:0.40, d8:0.30, d6:0.10 }, // platea
+  '05.08': { kg:100, d12:0.20, d10:0.40, d8:0.30, d6:0.10 }, // losa HAA
+  '05.14': { kg:160, d12:0.50, d10:0.30, d8:0.10, d6:0.10 }, // vigas
+  '05.15': { kg:85,  d12:0.40, d10:0.25, d8:0.10, d6:0.25 }, // columnas (estribos Ø6)
+  '05.16': { kg:80,  d12:0.30, d10:0.40, d8:0.20, d6:0.10 }, // tabiques
+};
+
+// ── Helper: línea companion genérica ─────────────────────────
+function _cmp(k, cant, zona, idSuffix, descOverride) {
+  const def = COMPANION[k];
+  if (!def || cant <= 0) return null;
+  const precio = def.precio;
+  const mat = R(cant * precio);
+  return {
+    id: `cmp_${idSuffix}`,
+    grupo: zona ? `zona_${zona.id}` : 'estructura',
+    grupoLabel: zona ? `${ZONA_TIPOS[zona.tipo]?.icon||'🔧'} ${zona.nombre}` : '🏗️ Estructura',
+    zonaId: zona?.id || null,
+    zonaNombre: zona?.nombre || 'Estructura',
+    zonaTipo: zona?.tipo || null,
+    categoria: 'companion',
+    categoriaLabel: descOverride || def.desc,
+    rubro_exportacion: def.rubro,
+    marca: 'Materiales',
+    desc: descOverride || def.desc,
+    unidad: def.unidad,
+    cant,
+    precio_mo: 0,
+    precio_mat: precio,
+    subtotal_mo: 0,
+    subtotal_mat: mat,
+    subtotal: mat,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// COMPANIONS POR SECCIÓN
+// ══════════════════════════════════════════════════════════════
+
+// ── Ceramica / porcelanato en piso ────────────────────────────
+// cant = m² con desperdicio incluido
+function cmpCeramicaPiso(selId, cant, zona) {
+  const isPorc = selId?.includes('porc') || selId?.includes('lux');
+  const isMos  = selId?.includes('mos') || selId?.includes('ven');
+  const isCem  = selId?.includes('cem') || selId?.includes('ferro') || selId?.includes('rod') || selId?.includes('est');
+  const isFlot = selId?.includes('float') || selId?.includes('lvt');
+  const isPar  = selId?.includes('parq') || selId?.includes('pinotea');
+
+  const lines = [];
+
+  if (isCem || isPar) {
+    // Cemento ferrocrementado / parquet: no necesita adhesivo cerámico
+    if (isPar) {
+      lines.push(_cmp('cola_parquet', Math.ceil(cant * 0.5 / 5), zona, `${zona.id}_colapar`, `Cola parquet (0.5 kg/m²)`));
+      lines.push(_cmp('piso_film',    Math.ceil(cant / 25),       zona, `${zona.id}_film`,    `Film barrera vapor`));
+    }
+  } else if (isFlot) {
+    lines.push(_cmp('nivelante_25', Math.ceil(cant * 2 / 25), zona, `${zona.id}_nivel`, `Nivelante (2 kg/m²)`));
+  } else if (!isMos) {
+    // Cerámico o porcelanato
+    const kgAdh = isPorc ? 6 : 5;
+    const adhKey = isPorc ? 'adh_cem_flex' : 'adh_cem_std';
+    lines.push(_cmp(adhKey,        Math.ceil(cant * kgAdh / 25),      zona, `${zona.id}_adh`,   `Adhesivo ${isPorc?'flexible':'std'} (${kgAdh} kg/m²)`));
+    lines.push(_cmp('frague_piso', Math.ceil(cant * 0.35 / 2),        zona, `${zona.id}_frg`,   `Fragüe piso (0.35 kg/m²)`));
+    lines.push(_cmp('crucetas_2mm',Math.ceil(cant * 25 / 100),         zona, `${zona.id}_cruc`,  `Crucetas 2mm (25 u/m²)`));
+  }
+
+  // Zócalo para TODOS los pisos de habitaciones y zonas habitables
+  const zonasConZocalo = ['habitacion','living','cocina','garage'];
+  if (zonasConZocalo.includes(zona.tipo)) {
+    const perim = Math.round(4 * Math.sqrt(zona.m2) * 1.10);
+    const zKey  = (isPorc || selId?.includes('cer')) ? 'zocalo_cer' : isPar ? 'zocalo_mad' : 'zocalo_mdf';
+    lines.push(_cmp(zKey, perim, zona, `${zona.id}_zoc`, `Zócalo 8cm — perímetro ~${perim}ml`));
+  }
+
+  return lines.filter(Boolean);
+}
+
+// ── Ceramica en pared/revestimiento ───────────────────────────
+function cmpCeramicaPared(selId, cant, zona) {
+  const isMos  = selId?.includes('mos') || selId?.includes('hidr');
+  const isPorc = selId?.includes('porc');
+  if (isMos) return [];
+
+  const kgAdh = isPorc ? 5 : 4;
+  return [
+    _cmp('adh_cem_blanco', Math.ceil(cant * kgAdh / 25),   zona, `${zona.id}_radh`, `Adhesivo blanco pared (${kgAdh} kg/m²)`),
+    _cmp('frague_pared',   Math.ceil(cant * 0.40 / 1),     zona, `${zona.id}_rfrg`, `Fragüe pared (0.40 kg/m²)`),
+    _cmp('crucetas_2mm',   Math.ceil(cant * 20 / 100),      zona, `${zona.id}_rcruc`,`Crucetas 2mm (20 u/m²)`),
+  ].filter(Boolean);
+}
+
+// ── Pintura completa (sellador + enduído + látex en litros) ───
+// cant = zona.m2 * 1.10 (de la categoría)
+function cmpPintura(zona) {
+  // Superficie REAL pintada = paredes (4×√m²×2.8) + cielorraso (m²)
+  const m2 = zona.m2;
+  const superfReal = Math.round(m2 + 4 * Math.sqrt(m2) * 2.80);
+
+  // Sellador: 0.12 lt/m²
+  const sellLt = Math.ceil(superfReal * 0.12);
+  // Enduído: 0.30 kg/m² por mano → 1 mano → balde 30kg
+  const enduBalde = Math.max(1, Math.ceil(superfReal * 0.30 / 30));
+  // Látex: 2 manos × 0.12 lt/m²/mano = 0.24 lt/m² → balde 20lt
+  const latBalde = Math.max(1, Math.ceil(superfReal * 0.24 / 20));
+
+  return [
+    _cmp('sellador_acr', sellLt,    zona, `${zona.id}_sell`, `Sellador acrílico — ${superfReal}m² sup. real`),
+    _cmp('enduido_30',   enduBalde, zona, `${zona.id}_endu`, `Enduído plástico — ${superfReal}m²`),
+    _cmp('latex_20lt',   latBalde,  zona, `${zona.id}_lat`,  `Látex 2 manos — ${superfReal}m²`),
+  ].filter(Boolean);
+}
+
+// ── Durlock cielorraso suspendido ─────────────────────────────
+function cmpDurlock(zona, cant) {
+  const m2 = zona.m2;
+  const perim = 4 * Math.sqrt(m2);
+
+  const placas    = Math.ceil(m2 * 1.05 / 2.88);         // 1 placa = 2.88m²
+  const soleras   = Math.ceil(perim * 2 / 3);             // solera arriba y abajo, tramos 3m
+  const montantes = Math.ceil(m2 / (0.60 * 3));           // cada 0.60m, largo 3m
+  const tornCajas = Math.max(1, Math.ceil(m2 * 25 / 250));// 25 tornillos/m²
+  const masilla   = Math.max(1, Math.ceil(m2 * 1.5 / 30));// 1.5 kg/m²
+  const cinta     = Math.max(1, Math.ceil(m2 * 0.8 / 90));// 0.8 ml/m²
+
+  return [
+    _cmp('placa_yeso_12', placas,    zona, `${zona.id}_dpl`,  `Placas yeso 12.5mm — ${m2}m²`),
+    _cmp('perfil_f47',    soleras,   zona, `${zona.id}_dsol`, `Perfiles solera F47 — per. ${Math.round(perim)}ml`),
+    _cmp('perfil_w50',    montantes, zona, `${zona.id}_dmon`, `Perfiles montante W50 c/0.60m`),
+    _cmp('torn_35x25',    tornCajas, zona, `${zona.id}_dtor`, null),
+    _cmp('masilla_30',    masilla,   zona, `${zona.id}_dmas`, null),
+    _cmp('cinta_papel',   cinta,     zona, `${zona.id}_dcin`, null),
+  ].filter(Boolean);
+}
+
+// ── Cielorraso yeso aplicado ──────────────────────────────────
+function cmpYesoAplic(zona, cant) {
+  // Cal + arena fina por m²
+  const m2 = zona.m2;
+  const calB  = Math.ceil(m2 * 0.15);      // ~0.15 bolsa 25kg / m²
+  const arenaM3 = R(m2 * 0.012);           // 0.012 m³/m²
+  const yesoB = Math.ceil(m2 * 0.20);      // yeso fino 0.20 bolsa/m²
+
+  return [
+    _cmp('cal_hidra_25',  calB,    zona, `${zona.id}_ycal`,   `Cal hidráulica cielorraso`),
+    _cmp('arena_fina_m3', arenaM3, zona, `${zona.id}_yarena`, `Arena fina cielorraso`),
+    _cmp('yeso_fino_25',  yesoB,   zona, `${zona.id}_yyeso`,  `Yeso fino cielorraso`),
+  ].filter(Boolean);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ESTRUCTURA — MATERIALES REALES POR ELEMENTO
+// ══════════════════════════════════════════════════════════════
+function calcularCompanionEstructura(proyecto) {
+  const { tipoEstructura, mCubiertos, mSemicubiertos, mBalcones, techo } = proyecto;
+  const m2 = (mCubiertos||0) + (mSemicubiertos||0)*0.5 + (mBalcones||0)*0.5;
+  if (m2 <= 0) return [];
+
+  const items = ESTRUCTURA_AUTO[tipoEstructura] || ESTRUCTURA_AUTO.mamposteria;
+  const lines = [];
+  let seqId = 0;
+  const id = () => `estm_${seqId++}`;
+
+  const cE = (k, cant, desc) => {
+    const def = COMPANION[k]; if (!def || cant <= 0) return null;
+    const mat = R(cant * def.precio);
+    return {
+      id: id(), grupo:'estructura', grupoLabel:'🏗️ Estructura',
+      rubro:'estructura', rubro_exportacion: def.rubro,
+      marca:'Materiales', categoria:'companion', categoriaLabel: desc||def.desc,
+      zonaId:null, zonaNombre:'Estructura', zonaTipo:null,
+      desc: desc||def.desc, unidad:def.unidad, cant,
+      precio_mo:0, precio_mat:def.precio,
+      subtotal_mo:0, subtotal_mat:mat, subtotal:mat,
+    };
+  };
+
+  items.forEach(it => {
+    const cant = R(it.coef * m2);
+
+    // ── HORMIGÓN (05.02, 05.03, 05.08, 05.14, 05.15, 05.16) ───
+    const refHorm = ['05.02','05.03','05.08','05.14','05.15','05.16'];
+    if (refHorm.includes(it.ref)) {
+      // Concreto: 7 bolsas cemento/m³, 0.65m³ arena, 0.85m³ piedra
+      lines.push(cE('cemento_50',     Math.ceil(cant * 7),         `Cemento Portland — ${it.desc}`));
+      lines.push(cE('arena_media_m3', R(cant * 0.65),              `Arena mediana — ${it.desc}`));
+      lines.push(cE('piedra_2040',    R(cant * 0.85),              `Piedra partida — ${it.desc}`));
+
+      // Hierro
+      const spec = HIERRO_SPEC[it.ref];
+      if (spec) {
+        const totalKg = cant * spec.kg;
+        ['d12','d10','d8','d6'].forEach(size => {
+          const ratio = spec[size] || 0;
+          if (ratio <= 0) return;
+          const barras = Math.ceil((totalKg * ratio) / BAR_KG[size]);
+          lines.push(cE(`hierro_${size}`, barras, `Hierro Ø${size.replace('d','')}mm — ${it.desc}`));
+        });
+        // Alambre n°17: 2% del peso total de hierro
+        const alamKg = totalKg * 0.02;
+        const alamRollos = Math.ceil(alamKg / 25);
+        if (alamRollos > 0) lines.push(cE('alambre_17', alamRollos, `Alambre n°17 — ${it.desc}`));
+      }
+    }
+
+    // ── MAMPOSTERÍA 18cm ──────────────────────────────────────
+    if (it.ref === '07.19') {
+      lines.push(cE('ladrillo_18',  Math.ceil(cant * 12.5),        `Ladrillos 18cm — ${cant} m²`));
+      lines.push(cE('cemento_50',   Math.ceil(cant * 0.10),        `Cemento mortero mampostería`));
+      lines.push(cE('cal_hidra_25', Math.ceil(cant * 0.15),        `Cal mortero mampostería`));
+      lines.push(cE('arena_fina_m3',R(cant * 0.015),               `Arena mortero mampostería`));
+    }
+
+    // ── MAMPOSTERÍA 8cm ───────────────────────────────────────
+    if (it.ref === '07.17') {
+      lines.push(cE('ladrillo_8',   Math.ceil(cant * 17),          `Ladrillos 8cm — ${cant} m²`));
+      lines.push(cE('cemento_50',   Math.ceil(cant * 0.08),        `Cemento mortero mampostería`));
+      lines.push(cE('cal_hidra_25', Math.ceil(cant * 0.12),        `Cal mortero mampostería`));
+      lines.push(cE('arena_fina_m3',R(cant * 0.012),               `Arena mortero mampostería`));
+    }
+
+    // ── LOSA VIGUETAS ─────────────────────────────────────────
+    if (it.ref === '05.13') {
+      const viguetas   = Math.ceil(cant * 1.35);    // 1.35 u/m²
+      const bovedillas = Math.ceil(cant * 4);        // 4 u/m²
+      const mallas     = Math.ceil(cant * 1.05 / 12.9); // paño 2.15×6m = 12.9m²
+      const cementoLosa = Math.ceil(cant * 0.06 * 7); // 0.06 m³/m² de hormigón relleno
+      lines.push(cE('vigueta_v50',   viguetas,    `Viguetas pretensadas V50`));
+      lines.push(cE('bovedilla_12',  bovedillas,  `Bovedillas 12cm`));
+      lines.push(cE('malla_reparto', mallas,      `Malla de reparto Ø4.2 15×15`));
+      lines.push(cE('cemento_50',    cementoLosa, `Cemento relleno losa viguetas`));
+    }
+
+    // ── REVOQUE GRUESO + FINO ─────────────────────────────────
+    if (it.ref === '11.01') {
+      // Cal, arena fina, cemento
+      lines.push(cE('cal_hidra_25',  Math.ceil(cant * 0.15),   `Cal hidráulica — revoque grueso+fino`));
+      lines.push(cE('arena_fina_m3', R(cant * 0.015),          `Arena fina — revoque`));
+      lines.push(cE('cemento_50',    Math.ceil(cant * 0.08),   `Cemento — revoque grueso`));
+    }
+
+    // ── REVOQUE YESO ─────────────────────────────────────────
+    if (it.ref === '11.07') {
+      lines.push(cE('yeso_fino_25', Math.ceil(cant * 0.20),    `Yeso fino interior proyectable`));
+    }
+
+    // ── STEEL FRAME TABIQUE ───────────────────────────────────
+    if (['08.01','08.02'].includes(it.ref)) {
+      const montantes  = Math.ceil(cant / (0.60 * 3));         // 1 montante c/0.60m, largo 3m
+      const soleras    = Math.ceil(cant / 3 * 2);              // solera piso + techo
+      const tornCajas  = Math.ceil(cant * 10 / 100);           // 10 tornillos/m²
+      lines.push(cE('perfil_c90',   montantes,  `Perfiles C-90 montante — ${it.desc}`));
+      lines.push(cE('perfil_u90',   soleras,    `Perfiles U-90 solera — ${it.desc}`));
+      lines.push(cE('torn_sf_100',  tornCajas,  `Tornillos SF — ${it.desc}`));
+    }
+  });
+
+  // ── CANALETAS Y BAJADAS PLUVIALES ────────────────────────────
+  const m2techo = mCubiertos || 0;
+  if (m2techo > 0) {
+    // Perímetro techo estimado: 4 × √m² (cuadrado) + 30% retiros
+    const perTecho = Math.round(4 * Math.sqrt(m2techo) * 1.30);
+    const canaletas = Math.ceil(perTecho / 3);             // tramos 3m
+    const bajadas   = Math.max(2, Math.round(perTecho / 15)); // 1 bajada c/15m perím.
+    lines.push(cE('canaleta_zinc', canaletas, `Canaleta zinc pluvial — ${perTecho}ml`));
+    lines.push(cE('bajada_pvc110', bajadas,   `Bajada pluvial PVC 110mm`));
+    lines.push(cE('codo_pluvial',  bajadas*2, `Codos pluviales PVC 87°`));
+  }
+
+  return lines.filter(Boolean);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ESTRUCTURA PRINCIPAL (MO + items)
+// ══════════════════════════════════════════════════════════════
 export function calcularEstructura(proyecto) {
   const { tipoEstructura, mCubiertos, mSemicubiertos, mBalcones, techo } = proyecto;
   const m2 = (mCubiertos||0) + (mSemicubiertos||0)*0.5 + (mBalcones||0)*0.5;
@@ -18,19 +299,16 @@ export function calcularEstructura(proyecto) {
   const items = ESTRUCTURA_AUTO[tipoEstructura] || ESTRUCTURA_AUTO.mamposteria;
   const lineas = items.map((it, i) => {
     const cant = R(it.coef * m2);
-    const mo   = PRECIO_MO_CLARIN[it.ref]  || 0;
-    const mat  = PRECIO_MAT_CLARIN[it.ref] || 0;
+    const mo   = PRECIO_MO_CLARIN[it.ref] || 0;
+    const mat  = PRECIO_MAT_CLARIN[it.ref] || 0; // 0 para los elementos con companion
     return {
-      id: `est_${i}`,
-      grupo: 'estructura',  grupoLabel: '🏗️ Estructura',
-      rubro: 'estructura',  rubro_exportacion: 'Estructura',
-      marca: 'Varios',      categoria: 'estructura', categoriaLabel: 'Estructura',
-      zonaId: null,         zonaNombre: 'Estructura', zonaTipo: null,
-      ref: it.ref, desc: it.desc, unidad: it.u,
-      cant, precio_mo: mo, precio_mat: mat,
-      subtotal_mo:  R(cant * mo),
-      subtotal_mat: R(cant * mat),
-      subtotal:     R(cant * (mo + mat)),
+      id:`est_${i}`, grupo:'estructura', grupoLabel:'🏗️ Estructura',
+      rubro:'estructura', rubro_exportacion:'Estructura',
+      marca:'MO UOCRA', categoria:'estructura', categoriaLabel:'Estructura',
+      zonaId:null, zonaNombre:'Estructura', zonaTipo:null,
+      ref:it.ref, desc:it.desc, unidad:it.u, cant,
+      precio_mo:mo, precio_mat:mat,
+      subtotal_mo:R(cant*mo), subtotal_mat:R(cant*mat), subtotal:R(cant*(mo+mat)),
     };
   });
 
@@ -41,417 +319,108 @@ export function calcularEstructura(proyecto) {
     dos_aguas:   'Cubierta teja francesa + estructura madera vista',
     steel_frame: 'Cubierta chapa sándwich PIR c/aislación térmica',
   };
-  const tRef = techoRef[techo] || '10.01';
-  const m2t  = R((mCubiertos||0) * 1.08);
-  const tMO  = PRECIO_MO_CLARIN[tRef]  || 253845;
-  const tMAT = PRECIO_MAT_CLARIN[tRef] || 95000;
+  const tRef = techoRef[techo]||'10.01';
+  const m2t  = R((mCubiertos||0)*1.08);
+  const tMO  = PRECIO_MO_CLARIN[tRef]||253845;
+  const tMAT = PRECIO_MAT_CLARIN[tRef]||95000;
   lineas.push({
-    id: 'est_techo',
-    grupo: 'estructura',  grupoLabel: '🏗️ Estructura',
-    rubro: 'estructura',  rubro_exportacion: 'Estructura',
-    marca: 'Varios',      categoria: 'cubierta', categoriaLabel: 'Cubierta',
-    zonaId: null,         zonaNombre: 'Estructura', zonaTipo: null,
-    ref: tRef, desc: techoDesc[techo] || techoDesc.terraza,
-    unidad: 'm²', cant: m2t,
-    precio_mo: tMO, precio_mat: tMAT,
-    subtotal_mo:  R(m2t * tMO),
-    subtotal_mat: R(m2t * tMAT),
-    subtotal:     R(m2t * (tMO + tMAT)),
+    id:'est_techo', grupo:'estructura', grupoLabel:'🏗️ Estructura',
+    rubro:'estructura', rubro_exportacion:'Estructura',
+    marca:'Varios', categoria:'cubierta', categoriaLabel:'Cubierta',
+    zonaId:null, zonaNombre:'Estructura', zonaTipo:null,
+    ref:tRef, desc:techoDesc[techo]||techoDesc.terraza,
+    unidad:'m²', cant:m2t,
+    precio_mo:tMO, precio_mat:tMAT,
+    subtotal_mo:R(m2t*tMO), subtotal_mat:R(m2t*tMAT), subtotal:R(m2t*(tMO+tMAT)),
   });
 
-  return lineas;
+  // Agregar companion materials (cemento, hierro, ladrillos, etc.)
+  const companions = calcularCompanionEstructura(proyecto);
+  return [...lineas, ...companions];
 }
 
 // ══════════════════════════════════════════════════════════════
 // PLOMERÍA BAÑO — pieza a pieza
 // ══════════════════════════════════════════════════════════════
-// Metodología:
-//   dist = distancia estimada (metros) desde sala de máquinas hasta el baño
-//   conBidet = true → incluye ramal bidet en desagüe y supply
-//
-// Desagüe:
-//   110mm — colector inodoro hasta ramal cloacal
-//   75mm  — ducha + bidet + lavatorio hasta colector
-//   50mm  — columna ventilación
-//   40mm  — ventilación secundaria
-//
-// Supply (termofusión):
-//   25mm → 20mm → 16mm  (distribución principal → ramales → llegadas artefactos)
-// ══════════════════════════════════════════════════════════════
 function calcularPlomeriaZona(zona, m2Edificio) {
   const dist     = Math.max(4, Math.ceil(Math.sqrt(m2Edificio) * 0.7));
   const conBidet = zona.conBidet !== false;
-
-  // Cantidad de artefactos con supply (lavatorio + ducha + bidet optativo)
-  const nArtef = 2 + (conBidet ? 1 : 0);
-
-  // Caños 110mm: tramo inodoro → colector (1 caño cada 2m + la vuelta)
-  const canos110 = Math.max(2, Math.ceil(dist / 2));
-  // Caños 75mm: siempre 3 (lavatorio + ducha + bidet hasta colector)
+  const nArtef   = 2 + (conBidet ? 1 : 0);
+  const canos110 = Math.max(2, Math.ceil(dist/2));
   const canos075 = 3 + (conBidet ? 1 : 0);
-  // Tramos supply 25mm: ida (AF) + ida (AC) × tramos de 4m hasta baño
-  const tramos25 = Math.max(2, Math.ceil(dist / 4)) * 2;
-  // Tramos 20mm: distribución interna (4m alcanza siempre para el baño)
+  const tramos25 = Math.max(2, Math.ceil(dist/4)) * 2;
   const tramos20 = 2;
-  // Tramos 16mm: llegada a cada artefacto (AF + AC = 2 tramos por artefacto)
   const tramos16 = nArtef * 2;
-
-  // Codos 25mm: arranque SM + quiebres de recorrido (≈ 1 cada 2m de dist)
-  const codos25 = 2 + Math.ceil(dist / 2);
-  // Codos 20mm: distribución interna baño (2 por ramal)
-  const codos20 = nArtef * 2;
-  // Codos 16mm: llegada a artefacto (1 codo por llegada AF + 1 por AC)
-  const codos16 = nArtef * 2;
-
-  // Tees 20mm: 1 por cada derivación (AF + AC)
-  const tees20 = nArtef;
-  // Reducciones 25→20: arranque de distribución (AF + AC)
-  const red25_20 = 2;
-  // Reducciones 20→16: 1 por cada llegada a artefacto (AF + AC)
-  const red20_16 = nArtef * 2;
+  const codos25  = 2 + Math.ceil(dist/2);
+  const codos20  = nArtef * 2;
+  const codos16  = nArtef * 2;
 
   const plom = [
-    // ── DESAGÜE CLOACAL ──────────────────────────────────────
-    { k:'pvc_110_2m',      cant: canos110,          rubro:'Plomería — Desagüe',        desc_override: null },
-    { k:'pvc_075_2m',      cant: canos075,           rubro:'Plomería — Desagüe',        desc_override: null },
-    { k:'pvc_050_2m',      cant: 1,                  rubro:'Plomería — Desagüe',        desc_override: 'Caño PVC 50mm ventilación (columna)' },
-    { k:'pvc_040_2m',      cant: 1,                  rubro:'Plomería — Desagüe',        desc_override: 'Caño PVC 40mm ventilación secundaria' },
-    { k:'codo_pvc90_110',  cant: 2,                  rubro:'Plomería — Desagüe' },
-    { k:'codo_pvc45_110',  cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'codo_pvc90_075',  cant: 2 + (conBidet?1:0), rubro:'Plomería — Desagüe' },
-    { k:'codo_pvc45_075',  cant: 2,                  rubro:'Plomería — Desagüe' },
-    { k:'tee_pvc_110',     cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'tee_red_110_075', cant: 1 + (conBidet?1:0), rubro:'Plomería — Desagüe' },
-    { k:'tee_red_075_050', cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'cupla_pvc_110',   cant: Math.ceil(canos110/2), rubro:'Plomería — Desagüe' },
-    { k:'cupla_pvc_075',   cant: 2,                  rubro:'Plomería — Desagüe' },
-    { k:'colarin_110',     cant: 1,                  rubro:'Plomería — Desagüe',        desc_override: 'Collarín inodoro PVC 110mm c/tornillos' },
-    { k:'sifon_ducha',     cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'rejilla_piso_50', cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'tapon_inspeccion',cant: 1,                  rubro:'Plomería — Desagüe' },
-    { k:'adhesivo_pvc',    cant: 1,                  rubro:'Plomería — Desagüe' },
-
-    // ── AGUA FRÍA + CALIENTE (termofusión) ───────────────────
-    { k:'tf_25_4m',        cant: tramos25,            rubro:'Plomería — Agua fría/caliente' },
-    { k:'tf_20_4m',        cant: tramos20,            rubro:'Plomería — Agua fría/caliente' },
-    { k:'tf_16_4m',        cant: tramos16,            rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_25',      cant: codos25,             rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_20',      cant: codos20,             rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_16',      cant: codos16,             rubro:'Plomería — Agua fría/caliente' },
-    { k:'tee_tf_25',       cant: 2,                   rubro:'Plomería — Agua fría/caliente' }, // bifurcación AF + AC
-    { k:'tee_tf_20',       cant: tees20,              rubro:'Plomería — Agua fría/caliente' },
-    { k:'red_tf_25_20',    cant: red25_20,            rubro:'Plomería — Agua fría/caliente' },
-    { k:'red_tf_20_16',    cant: red20_16,            rubro:'Plomería — Agua fría/caliente' },
-    { k:'cupla_tf_20',     cant: 2,                   rubro:'Plomería — Agua fría/caliente' },
-
-    // ── CONEXIONES Y LLAVES ──────────────────────────────────
-    { k:'flexible_12',     cant: nArtef * 2,          rubro:'Plomería — Conexiones' }, // AF+AC por artefacto
-    { k:'flexible_38',     cant: 1,                   rubro:'Plomería — Conexiones',   desc_override: 'Flexible 3/8" mochila inodoro' },
-    { k:'llave_12',        cant: nArtef,              rubro:'Plomería — Conexiones' }, // 1 por artefacto (AC)
-    { k:'valvula_escl_34', cant: 1,                   rubro:'Plomería — Conexiones',   desc_override: 'Válvula esclusa 3/4" llave general baño' },
-    { k:'teflon',          cant: 4,                   rubro:'Plomería — Conexiones' },
-    { k:'sellarosca',      cant: 2,                   rubro:'Plomería — Conexiones' },
+    { k:'pvc_110_2m',      cant:canos110,              r:'Plomería — Desagüe',             d:null },
+    { k:'pvc_075_2m',      cant:canos075,              r:'Plomería — Desagüe',             d:null },
+    { k:'pvc_050_2m',      cant:1,                     r:'Plomería — Desagüe',             d:'Caño PVC 50mm ventilación (columna)' },
+    { k:'pvc_040_2m',      cant:1,                     r:'Plomería — Desagüe',             d:'Caño PVC 40mm ventilación secundaria' },
+    { k:'codo_pvc90_110',  cant:2,                     r:'Plomería — Desagüe',             d:null },
+    { k:'codo_pvc45_110',  cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'codo_pvc90_075',  cant:2+(conBidet?1:0),      r:'Plomería — Desagüe',             d:null },
+    { k:'codo_pvc45_075',  cant:2,                     r:'Plomería — Desagüe',             d:null },
+    { k:'tee_pvc_110',     cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'tee_red_110_075', cant:1+(conBidet?1:0),      r:'Plomería — Desagüe',             d:null },
+    { k:'tee_red_075_050', cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'cupla_pvc_110',   cant:Math.ceil(canos110/2), r:'Plomería — Desagüe',             d:null },
+    { k:'cupla_pvc_075',   cant:2,                     r:'Plomería — Desagüe',             d:null },
+    { k:'colarin_110',     cant:1,                     r:'Plomería — Desagüe',             d:'Collarín inodoro PVC 110mm c/tornillos' },
+    { k:'sifon_ducha',     cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'rejilla_piso_50', cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'tapon_inspeccion',cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'adhesivo_pvc',    cant:1,                     r:'Plomería — Desagüe',             d:null },
+    { k:'tf_25_4m',        cant:tramos25,              r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'tf_20_4m',        cant:tramos20,              r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'tf_16_4m',        cant:tramos16,              r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'codo_tf_25',      cant:codos25,               r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'codo_tf_20',      cant:codos20,               r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'codo_tf_16',      cant:codos16,               r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'tee_tf_25',       cant:2,                     r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'tee_tf_20',       cant:nArtef,                r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'red_tf_25_20',    cant:2,                     r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'red_tf_20_16',    cant:nArtef*2,              r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'cupla_tf_20',     cant:2,                     r:'Plomería — Agua fría/caliente',  d:null },
+    { k:'flexible_12',     cant:nArtef*2,              r:'Plomería — Conexiones',          d:null },
+    { k:'flexible_38',     cant:1,                     r:'Plomería — Conexiones',          d:'Flexible 3/8" mochila inodoro' },
+    { k:'llave_12',        cant:nArtef,                r:'Plomería — Conexiones',          d:null },
+    { k:'valvula_escl_34', cant:1,                     r:'Plomería — Conexiones',          d:'Válvula esclusa 3/4" llave general baño' },
+    { k:'teflon',          cant:4,                     r:'Plomería — Conexiones',          d:null },
+    { k:'sellarosca',      cant:2,                     r:'Plomería — Conexiones',          d:null },
   ];
-
-  // MO rough baño: maestro plomero + ayudante, ~3 jornales
-  // Jornal maestro plomero UOCRA = ~$112,000/día → 3 días = $336,000
-  const MO_ROUGH_BANO = 336000;
-
-  return _lineasPlomeria(plom, zona, `🚿 ${zona.nombre}`, MO_ROUGH_BANO, 'z_plom');
+  return _lineasPlomeria(plom, zona, `🚿 ${zona.nombre}`, 336000, 'z_plom');
 }
 
-// ══════════════════════════════════════════════════════════════
-// PLOMERÍA COCINA — pieza a pieza
-// ══════════════════════════════════════════════════════════════
-// Desagüe: pileta cocina (75mm) + lavarropa (50mm)
-// Supply: pileta cocina + lavarropa + lavavajillas (todos 1/2")
-// ══════════════════════════════════════════════════════════════
+// ── Plomería cocina ───────────────────────────────────────────
 function calcularPlomeriaCocina(zona, m2Edificio) {
-  const dist = Math.max(3, Math.ceil(Math.sqrt(m2Edificio) * 0.45));
-
-  const tramos25 = Math.max(2, Math.ceil(dist / 4)) * 2; // AF + AC
-  const tramos20 = 2;
-  const tramos16 = 6; // pileta AF+AC + lavarropa AF+AC + lavavajillas AF+AC
-  const codos25  = 2 + Math.ceil(dist / 2);
-  const codos20  = 3;
-  const codos16  = 4;
+  const dist     = Math.max(3, Math.ceil(Math.sqrt(m2Edificio)*0.45));
+  const tramos25 = Math.max(2, Math.ceil(dist/4))*2;
+  const codos25  = 2+Math.ceil(dist/2);
 
   const plom = [
-    // ── DESAGÜE ──────────────────────────────────────────────
-    { k:'pvc_075_2m',      cant: Math.max(1, Math.ceil(dist/2)),  rubro:'Plomería — Desagüe', desc_override:'Caño PVC 75mm desagüe pileta cocina' },
-    { k:'pvc_050_2m',      cant: 2,                               rubro:'Plomería — Desagüe', desc_override:'Caño PVC 50mm desagüe lavarropa + ventilación' },
-    { k:'pvc_040_2m',      cant: 1,                               rubro:'Plomería — Desagüe', desc_override:'Caño PVC 40mm ventilación secundaria' },
-    { k:'codo_pvc90_075',  cant: 2,                               rubro:'Plomería — Desagüe' },
-    { k:'codo_pvc45_075',  cant: 1,                               rubro:'Plomería — Desagüe' },
-    { k:'codo_pvc90_050',  cant: 2,                               rubro:'Plomería — Desagüe' },
-    { k:'tee_pvc_075',     cant: 1,                               rubro:'Plomería — Desagüe' },
-    { k:'tee_red_075_050', cant: 1,                               rubro:'Plomería — Desagüe' },
-    { k:'cupla_pvc_075',   cant: 2,                               rubro:'Plomería — Desagüe' },
-    { k:'tapon_inspeccion',cant: 1,                               rubro:'Plomería — Desagüe' },
-    { k:'adhesivo_pvc',    cant: 1,                               rubro:'Plomería — Desagüe' },
-
-    // ── AGUA FRÍA + CALIENTE (termofusión) ───────────────────
-    { k:'tf_25_4m',        cant: tramos25,  rubro:'Plomería — Agua fría/caliente' },
-    { k:'tf_20_4m',        cant: tramos20,  rubro:'Plomería — Agua fría/caliente' },
-    { k:'tf_16_4m',        cant: tramos16,  rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_25',      cant: codos25,   rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_20',      cant: codos20,   rubro:'Plomería — Agua fría/caliente' },
-    { k:'codo_tf_16',      cant: codos16,   rubro:'Plomería — Agua fría/caliente' },
-    { k:'tee_tf_25',       cant: 2,         rubro:'Plomería — Agua fría/caliente' },
-    { k:'tee_tf_20',       cant: 3,         rubro:'Plomería — Agua fría/caliente' },
-    { k:'red_tf_25_20',    cant: 2,         rubro:'Plomería — Agua fría/caliente' },
-    { k:'red_tf_20_16',    cant: 4,         rubro:'Plomería — Agua fría/caliente' },
-    { k:'cupla_tf_20',     cant: 2,         rubro:'Plomería — Agua fría/caliente' },
-
-    // ── CONEXIONES ───────────────────────────────────────────
-    { k:'flexible_12',     cant: 6,         rubro:'Plomería — Conexiones', desc_override:'Flexible 1/2" pileta + lavarropa + lavavajillas (AF+AC)' },
-    { k:'llave_12',        cant: 3,         rubro:'Plomería — Conexiones', desc_override:'Llave 1/2" pileta / lavarropa / lavavajillas (AC)' },
-    { k:'llave_34',        cant: 1,         rubro:'Plomería — Conexiones', desc_override:'Llave 3/4" general cocina' },
-    { k:'teflon',          cant: 3,         rubro:'Plomería — Conexiones' },
-    { k:'sellarosca',      cant: 2,         rubro:'Plomería — Conexiones' },
-  ];
-
-  // MO rough cocina: ~2.5 jornales plomero
-  const MO_ROUGH_COCINA = 280000;
-
-  return _lineasPlomeria(plom, zona, `🍳 ${zona.nombre}`, MO_ROUGH_COCINA, 'z_plom_coc');
-}
-
-// ── Helper interno: convierte un array de spec → líneas de presupuesto ──
-function _lineasPlomeria(plom, zona, grupoLabel, moTotal, idPrefix) {
-  return plom.map((p, i) => {
-    const def = PLOMERIA[p.k];
-    if (!def) return null;
-    const mat = R(p.cant * def.precio);
-    return {
-      id: `${idPrefix}_${zona.id}_${i}`,
-      grupo: `zona_${zona.id}`, grupoLabel,
-      zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: zona.tipo,
-      categoria: 'plomeria', categoriaLabel: 'Plomería',
-      rubro_exportacion: p.rubro,
-      marca: 'Materiales sanitarios',
-      desc: p.desc_override || def.desc,
-      unidad: def.unidad, cant: p.cant,
-      precio_mo:  i === 0 ? moTotal : 0,
-      precio_mat: def.precio,
-      subtotal_mo:  i === 0 ? moTotal : 0,
-      subtotal_mat: mat,
-      subtotal:     (i === 0 ? moTotal : 0) + mat,
-    };
-  }).filter(Boolean);
-}
-
-// ══════════════════════════════════════════════════════════════
-// ELECTRICIDAD — pieza a pieza por zona
-// ══════════════════════════════════════════════════════════════
-function calcularElectricidadZona(zona, m2Edificio) {
-  // Circuitos reales por tipo (standard residencial ADEPA/IRAM 2200)
-  const circuitosPorTipo = {
-    bano: 4, cocina: 8, habitacion: 6, living: 8, garage: 4, sala_maquinas: 6, default: 4,
-  };
-  const nCircuitos = circuitosPorTipo[zona.tipo] || circuitosPorTipo.default;
-
-  // ml de caño: perímetro estimado × 1.5 (sube + horizontal)
-  const mlCano  = Math.ceil(Math.sqrt(zona.m2) * 4 * 1.5);
-  const mCable  = Math.ceil(mlCano * 2.4);   // 2 conductores + 20% cruce
-  const canos38 = Math.ceil(mlCano / 3);
-  const cable25r = Math.ceil(mCable / 100) + 1;
-
-  const esPotencia = ['cocina', 'sala_maquinas'].includes(zona.tipo);
-  const esTablero  = zona.tipo === 'sala_maquinas';
-
-  const elec = [
-    { k:'cano_38',        cant: canos38,                        rubro:'Electricidad — Caños y conductos' },
-    { k:'cano_1p',        cant: 2,                              rubro:'Electricidad — Caños y conductos' },
-    { k:'cable_25_100',   cant: cable25r,                       rubro:'Electricidad — Cables' },
-    ...(esPotencia ? [{ k:'cable_4_100', cant: 1,               rubro:'Electricidad — Cables' }] : []),
-    { k:'termica_25',     cant: Math.ceil(nCircuitos / 3),      rubro:'Electricidad — Tablero y protecciones' },
-    ...(esPotencia ? [{ k:'termica_40',  cant: 2,               rubro:'Electricidad — Tablero y protecciones' }] : []),
-    { k:'diferencial_40', cant: 1,                              rubro:'Electricidad — Tablero y protecciones' },
-    ...(esTablero ? [{ k:'tablero_24',   cant: 1,               rubro:'Electricidad — Tablero y protecciones' }] : []),
-  ];
-
-  const MO_ELEC_ZONA = R(zona.m2 * 3800);
-
-  return elec.map((e, i) => {
-    const def = ELECTRICIDAD[e.k];
-    if (!def) return null;
-    return {
-      id: `z_${zona.id}_elec_${i}`,
-      grupo: `zona_${zona.id}`, grupoLabel: `${ZONA_TIPOS[zona.tipo]?.icon||'🔌'} ${zona.nombre}`,
-      zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: zona.tipo,
-      categoria: 'electricidad', categoriaLabel: 'Electricidad',
-      rubro_exportacion: e.rubro,
-      marca: 'Materiales eléctricos',
-      desc: def.desc, unidad: def.unidad, cant: e.cant,
-      precio_mo:  i === 0 ? MO_ELEC_ZONA : 0,
-      precio_mat: def.precio,
-      subtotal_mo:  i === 0 ? MO_ELEC_ZONA : 0,
-      subtotal_mat: R(e.cant * def.precio),
-      subtotal:     (i === 0 ? MO_ELEC_ZONA : 0) + R(e.cant * def.precio),
-    };
-  }).filter(Boolean);
-}
-
-// ══════════════════════════════════════════════════════════════
-// LÍNEAS COMPLETAS POR ZONA
-// ══════════════════════════════════════════════════════════════
-export function calcularLineasZona(zona, m2Edificio = 100) {
-  const tipoDef = ZONA_TIPOS[zona.tipo];
-  if (!tipoDef) return [];
-
-  const lineas   = [];
-  const inodSel  = INODOROS.find(i => i.id === zona.materiales?.inodoro?.id);
-  const conBidet = zona.conBidet !== false;
-
-  // ── A. Materiales seleccionados por el arquitecto ─────────
-  tipoDef.categorias.forEach(cat => {
-    const sel = zona.materiales?.[cat.id];
-    if (!sel || sel.tipo === 'omitir') return;
-
-    let precio_mat, precio_mo, desc, marca;
-
-    if (sel.tipo === 'personalizado') {
-      precio_mat = sel.precio_mat || 0;
-      precio_mo  = sel.precio_mo  || 0;
-      desc  = sel.desc  || cat.nombre;
-      marca = sel.marca || 'Personalizado';
-    } else {
-      const op = cat.opciones?.find(o => o.id === sel.id);
-      if (!op) return;
-      precio_mat = op.precio_mat;
-      precio_mo  = op.precio_mo;
-      desc  = op.desc;
-      marca = op.marca;
-    }
-
-    const desp = cat.desperdicio || 0;
-    let cant;
-    if (cat.unidad === 'm²') {
-      cant = R(zona.m2 * (1 + desp));
-    } else if (cat.unidad === 'ml') {
-      // Mesada: perímetro funcional ≈ raíz(m²) × 1.5
-      // Cocina 14m² → ~5.6ml; 20m² → ~6.7ml
-      cant = R(Math.max(2, Math.ceil(Math.sqrt(zona.m2) * 1.5)));
-    } else {
-      cant = 1;
-    }
-
-    lineas.push({
-      id: `z_${zona.id}_${cat.id}`,
-      grupo: `zona_${zona.id}`, grupoLabel: `${tipoDef.icon} ${zona.nombre}`,
-      zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: zona.tipo,
-      categoria: cat.id, categoriaLabel: cat.nombre,
-      rubro_exportacion: categoriaARubro(cat.id),
-      marca, desc, unidad: cat.unidad, cant,
-      precio_mo, precio_mat,
-      subtotal_mo:  R(cant * precio_mo),
-      subtotal_mat: R(cant * precio_mat),
-      subtotal:     R(cant * (precio_mo + precio_mat)),
-    });
-  });
-
-  // ── B. Inodoro + bidet + asiento ─────────────────────────
-  if (inodSel && zona.materiales?.inodoro?.id) {
-    const moInst = PRECIO_MO_CLARIN['23.01'] || 87085;
-    lineas.push({
-      id: `z_${zona.id}_inodoro`,
-      grupo: `zona_${zona.id}`, grupoLabel: `${tipoDef.icon} ${zona.nombre}`,
-      zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: 'bano',
-      categoria: 'inodoro', categoriaLabel: 'Inodoro',
-      rubro_exportacion: 'Sanitarios',
-      marca: inodSel.marca, desc: inodSel.desc, unidad: 'u', cant: 1,
-      precio_mo: moInst, precio_mat: inodSel.precio_mat,
-      subtotal_mo: moInst, subtotal_mat: inodSel.precio_mat,
-      subtotal: moInst + inodSel.precio_mat,
-    });
-
-    if (conBidet && inodSel.bidet_precio > 0) {
-      lineas.push({
-        id: `z_${zona.id}_bidet`,
-        grupo: `zona_${zona.id}`, grupoLabel: `${tipoDef.icon} ${zona.nombre}`,
-        zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: 'bano',
-        categoria: 'bidet', categoriaLabel: `Bidet (mismo brand: ${inodSel.marca} ${inodSel.linea})`,
-        rubro_exportacion: 'Sanitarios',
-        marca: inodSel.marca,
-        desc: `${inodSel.marca} ${inodSel.linea} bidet 3 agujeros`,
-        unidad: 'u', cant: 1,
-        precio_mo: moInst, precio_mat: inodSel.bidet_precio,
-        subtotal_mo: moInst, subtotal_mat: inodSel.bidet_precio,
-        subtotal: moInst + inodSel.bidet_precio,
-      });
-    }
-
-    const asientoSel    = zona.materiales?.asiento?.id;
-    const asientoPrecios = { asiento_plast: 27000, asiento_mad: 55000 };
-    const asientoDescs   = { asiento_plast: 'Asiento plástico reforzado', asiento_mad: 'Asiento madera laqueada' };
-    if (asientoSel) {
-      lineas.push({
-        id: `z_${zona.id}_asiento`,
-        grupo: `zona_${zona.id}`, grupoLabel: `${tipoDef.icon} ${zona.nombre}`,
-        zonaId: zona.id, zonaNombre: zona.nombre, zonaTipo: 'bano',
-        categoria: 'asiento', categoriaLabel: 'Asiento inodoro',
-        rubro_exportacion: 'Sanitarios',
-        marca: inodSel.marca, desc: asientoDescs[asientoSel] || asientoSel, unidad: 'u', cant: 1,
-        precio_mo: 0, precio_mat: asientoPrecios[asientoSel] || 0,
-        subtotal_mo: 0, subtotal_mat: asientoPrecios[asientoSel] || 0,
-        subtotal: asientoPrecios[asientoSel] || 0,
-      });
-    }
-  }
-
-  // ── C. Plomería rough diferenciada por tipo ───────────────
-  // sala_maquinas: MO instalación ya incluida en precio_mo de caldera/tanque
-  if (zona.tipo === 'bano') {
-    lineas.push(...calcularPlomeriaZona(zona, m2Edificio));
-  } else if (zona.tipo === 'cocina') {
-    lineas.push(...calcularPlomeriaCocina(zona, m2Edificio));
-  }
-
-  // ── D. Electricidad rough — solo zonas habitables ─────────
-  // techo / jardin / pileta / camaras: MO instalación ya en sus categorías
-  const ZONAS_CON_ELEC = ['bano', 'cocina', 'habitacion', 'living', 'garage', 'sala_maquinas'];
-  if (ZONAS_CON_ELEC.includes(zona.tipo)) {
-    lineas.push(...calcularElectricidadZona(zona, m2Edificio));
-  }
-
-  return lineas;
-}
-
-// ── Mapeo categoría → rubro exportación ──────────────────────
-function categoriaARubro(cat) {
-  const m = {
-    piso:'Pisos', piso_ext:'Pisos exteriores', revestimiento:'Revestimientos',
-    pintura:'Pintura', cielorraso:'Cielorrasos',
-    lavatorio:'Sanitarios', griferia_lav:'Griferías', griferia_ducha:'Griferías',
-    griferia:'Griferías', pileta_coc:'Sanitarios', mesada:'Marmolería',
-    plomeria:'Plomería', electricidad:'Electricidad',
-    caldera:'Calefacción', tanque:'Instalaciones', cubierta:'Cubierta',
-    inodoro:'Sanitarios', bidet:'Sanitarios', accesorios:'Sanitarios',
-    porton:'Carpintería', camaras:'Seguridad', alarma:'Seguridad',
-    tipo_pileta:'Pileta', equipo:'Pileta', riego:'Jardín',
-  };
-  return m[cat] || 'Varios';
-}
-
-// ── TOTALES ───────────────────────────────────────────────────
-export function calcularTotales(lineas) {
-  const sub_mo  = R(lineas.reduce((s, l) => s + (l.subtotal_mo  || 0), 0));
-  const sub_mat = R(lineas.reduce((s, l) => s + (l.subtotal_mat || 0), 0));
-  const subtotal  = R(sub_mo + sub_mat);
-  const gg        = R(subtotal * 0.10);
-  const beneficio = R(subtotal * 0.12);
-  const base_iva  = R(subtotal + gg + beneficio);
-  const iva       = R(base_iva * 0.21);
-  const iibb      = R(base_iva * 0.025);
-  const totalObra = R(base_iva + iva + iibb);
-  return { sub_mo, sub_mat, subtotal, gg, beneficio, base_iva, iva, iibb, totalObra };
-}
-
-// ── RESUMEN POR ZONA ──────────────────────────────────────────
-export function resumenPorZona(lineas) {
-  const map = {};
-  lineas.forEach(l => {
-    const key = l.zonaId || 'estructura';
-    if (!map[key]) map[key] = {
-      id: key, nombre: l.grupoLab
+    { k:'pvc_075_2m',      cant:Math.max(1,Math.ceil(dist/2)), r:'Plomería — Desagüe', d:'Caño PVC 75mm desagüe pileta cocina' },
+    { k:'pvc_050_2m',      cant:2,  r:'Plomería — Desagüe', d:'Caño PVC 50mm lavarropa + ventilación' },
+    { k:'pvc_040_2m',      cant:1,  r:'Plomería — Desagüe', d:'Caño PVC 40mm ventilación secundaria' },
+    { k:'codo_pvc90_075',  cant:2,  r:'Plomería — Desagüe', d:null },
+    { k:'codo_pvc45_075',  cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'codo_pvc90_050',  cant:2,  r:'Plomería — Desagüe', d:null },
+    { k:'tee_pvc_075',     cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'tee_red_075_050', cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'cupla_pvc_075',   cant:2,  r:'Plomería — Desagüe', d:null },
+    { k:'tapon_inspeccion',cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'adhesivo_pvc',    cant:1,  r:'Plomería — Desagüe', d:null },
+    { k:'tf_25_4m',        cant:tramos25, r:'Plomería — Agua fría/caliente', d:null },
+    { k:'tf_20_4m',        cant:2,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'tf_16_4m',        cant:6,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'codo_tf_25',      cant:codos25,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'codo_tf_20',      cant:3,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'codo_tf_16',      cant:4,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'tee_tf_25',       cant:2,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'tee_tf_20',       cant:3,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'red_tf_25_20',    cant:2,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'red_tf_20_16',    cant:4,  r:'Plomería — Agua fría/caliente', d:null },
+    { k:'cupla_tf_20',     cant:2,  r:'Plomería — Agua fría/caliente', d
