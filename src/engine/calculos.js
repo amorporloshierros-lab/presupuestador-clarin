@@ -74,7 +74,11 @@ function cmpCeramicaPiso(selId, cant, zona) {
     }
   } else if (isFlot) {
     lines.push(_cmp('nivelante_25', Math.ceil(cant * 2 / 25), zona, `${zona.id}_nivel`, `Nivelante (2 kg/m²)`));
-  } else if (!isMos) {
+  } else if (isMos) {
+    // Mosaico veneciano: cemento cola blanco + fragüe especial
+    lines.push(_cmp('adh_mosaico',    Math.ceil(cant * 3 / 25), zona, `${zona.id}_mosadh`, `Cemento cola blanco mosaico (3 kg/m²)`));
+    lines.push(_cmp('frague_mosaico', Math.ceil(cant * 0.30),   zona, `${zona.id}_mosfrg`, `Fragüe blanco mosaico (0.30 kg/m²)`));
+  } else {
     // Cerámico o porcelanato
     const kgAdh = isPorc ? 6 : 5;
     const adhKey = isPorc ? 'adh_cem_flex' : 'adh_cem_std';
@@ -95,16 +99,28 @@ function cmpCeramicaPiso(selId, cant, zona) {
 }
 
 // ── Ceramica en pared/revestimiento ───────────────────────────
-function cmpCeramicaPared(selId, cant, zona) {
-  const isMos  = selId?.includes('mos') || selId?.includes('hidr');
+// IMPORTANTE: usa área REAL de pared (no zona.m2)
+// cant que viene = zona.m2 * 1.10 (incorrecto para paredes)
+// Se recalcula internamente con perímetro × altura real
+function cmpCeramicaPared(selId, cantOrig, zona) {
+  // Área real de pared: perímetro × 2.6m altura × 0.85 (descuento aperturas)
+  const areaReal = R(4 * Math.sqrt(zona.m2) * 2.6 * 0.85 * 1.10);
+  const isMos  = selId?.includes('mos') || selId?.includes('hidr') || selId?.includes('tejuela');
   const isPorc = selId?.includes('porc');
-  if (isMos) return [];
+
+  if (isMos) {
+    // Mosaico: cemento cola blanco + fragüe especial
+    return [
+      _cmp('adh_cem_blanco', Math.ceil(areaReal * 3 / 25), zona, `${zona.id}_mosa`, `Cemento cola blanco mosaico (3 kg/m²)`),
+      _cmp('frague_pared',   Math.ceil(areaReal * 0.30),   zona, `${zona.id}_mosf`, `Fragüe mosaico (0.30 kg/m²)`),
+    ].filter(Boolean);
+  }
 
   const kgAdh = isPorc ? 5 : 4;
   return [
-    _cmp('adh_cem_blanco', Math.ceil(cant * kgAdh / 25),   zona, `${zona.id}_radh`, `Adhesivo blanco pared (${kgAdh} kg/m²)`),
-    _cmp('frague_pared',   Math.ceil(cant * 0.40 / 1),     zona, `${zona.id}_rfrg`, `Fragüe pared (0.40 kg/m²)`),
-    _cmp('crucetas_2mm',   Math.ceil(cant * 20 / 100),      zona, `${zona.id}_rcruc`,`Crucetas 2mm (20 u/m²)`),
+    _cmp('adh_cem_blanco', Math.ceil(areaReal * kgAdh / 25), zona, `${zona.id}_radh`, `Adhesivo blanco pared — ${areaReal}m² real (${kgAdh} kg/m²)`),
+    _cmp('frague_pared',   Math.ceil(areaReal * 0.40),       zona, `${zona.id}_rfrg`, `Fragüe pared (0.40 kg/m²)`),
+    _cmp('crucetas_2mm',   Math.ceil(areaReal * 20 / 100),   zona, `${zona.id}_rcruc`,`Crucetas 2mm (20 u/m²)`),
   ].filter(Boolean);
 }
 
@@ -262,6 +278,13 @@ function calcularCompanionEstructura(proyecto) {
       lines.push(cE('yeso_fino_25', Math.ceil(cant * 0.20),    `Yeso fino interior proyectable`));
     }
 
+    // ── PANEL OSB (steel frame) ───────────────────────────────
+    if (it.ref === '08.08') {
+      // Panel OSB 9mm 2.44×1.22m = 2.97m² por panel
+      const paneles = Math.ceil(cant * 1.05 / 2.97);
+      lines.push(cE('osb_9mm', paneles, `Panel OSB 9mm — ${cant} m²`));
+    }
+
     // ── STEEL FRAME TABIQUE ───────────────────────────────────
     if (['08.01','08.02'].includes(it.ref)) {
       const montantes  = Math.ceil(cant / (0.60 * 3));         // 1 montante c/0.60m, largo 3m
@@ -406,21 +429,4 @@ function calcularPlomeriaCocina(zona, m2Edificio) {
     { k:'pvc_050_2m',      cant:2,  r:'Plomería — Desagüe', d:'Caño PVC 50mm lavarropa + ventilación' },
     { k:'pvc_040_2m',      cant:1,  r:'Plomería — Desagüe', d:'Caño PVC 40mm ventilación secundaria' },
     { k:'codo_pvc90_075',  cant:2,  r:'Plomería — Desagüe', d:null },
-    { k:'codo_pvc45_075',  cant:1,  r:'Plomería — Desagüe', d:null },
-    { k:'codo_pvc90_050',  cant:2,  r:'Plomería — Desagüe', d:null },
-    { k:'tee_pvc_075',     cant:1,  r:'Plomería — Desagüe', d:null },
-    { k:'tee_red_075_050', cant:1,  r:'Plomería — Desagüe', d:null },
-    { k:'cupla_pvc_075',   cant:2,  r:'Plomería — Desagüe', d:null },
-    { k:'tapon_inspeccion',cant:1,  r:'Plomería — Desagüe', d:null },
-    { k:'adhesivo_pvc',    cant:1,  r:'Plomería — Desagüe', d:null },
-    { k:'tf_25_4m',        cant:tramos25, r:'Plomería — Agua fría/caliente', d:null },
-    { k:'tf_20_4m',        cant:2,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'tf_16_4m',        cant:6,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'codo_tf_25',      cant:codos25,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'codo_tf_20',      cant:3,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'codo_tf_16',      cant:4,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'tee_tf_25',       cant:2,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'tee_tf_20',       cant:3,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'red_tf_25_20',    cant:2,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'red_tf_20_16',    cant:4,  r:'Plomería — Agua fría/caliente', d:null },
-    { k:'cupla_tf_20',     cant:2,  r:'Plomería — Agua fría/caliente', d
+    { k:'codo_pvc45_075',  cant:1,  r:'Plomer�
